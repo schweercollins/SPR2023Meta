@@ -1,0 +1,129 @@
+---
+title: "SPR 2023: Investigating Variation in Effects"
+author: "Maria Schweer-Collins, Nicholas Parr, Sean Grant"
+date: "2023-05-30"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# You can use this code to install packages required to follow along
+# install.packages(c("robutmeta", "tidyverse", "metafor", "meta", "rio", "here", "readxl"))
+library(robumeta)
+library(tidyverse)
+library(metafor)
+library(meta)
+library(rio)
+library(here)
+library(readxl)
+```
+
+
+## Follow along with session "Investigating Variation in Effects"
+
+
+### Import data
+```{r import, echo = TRUE, eval = TRUE}
+
+
+anxiety_symptoms <- import(here("data", "anxiety_symptoms.csv"))
+
+     
+### You should have 16 observations/studies
+```
+
+### Run random-effects meta-analysis 
+
+```{r random-effects}
+anxiety_re <- rma(yi, vi, data = anxiety_symptoms, method="REML", knha=TRUE)
+anxiety_re
+
+# obtain prediction intervals using predict function
+
+predict(anxiety_re)
+
+```
+
+
+### Visualize the results with a forest plot 
+
+A 95% prediction interval is included in a forest plot by using the addcred = TRUE argument, 
+and is denoted by the gray bounding lines around the 
+overall effect size estimate (the diamond-shaped indicator). 
+
+```{r forest, out.width= "125%", out.height="165%"}
+forest(anxiety_re, 
+          header=c("Author and Year", "SMD [95% CI]"), 
+          mlab="Random-Effects", 
+          order=-yi, 
+          slab = anxiety_symptoms$study, 
+          xlab = "Standardized Mean Difference",
+          addcred = TRUE,
+          cex = 1,
+          xlim=c(-3.5,3))
+text(c(-2,1), -1.75, c("Favors Intervention","Favors Control"), pos=c(4,2), offset=-0.3)
+```
+
+
+
+
+### Now we will examine the categorical moderator "comparator_f" using meta-regression
+
+The following model specification fits a mixed-effects meta-regression model to examine 
+whether the control group/comparator type moderates intervention effects.
+comparator_f is a factor (categorical) variable with three levels: active, treatment as usual (Tx as usual),
+and Waitlist of no-treatment control (Control). The treatment as usual comparator serves as the reference level
+for this variable. knha = TRUE indicates that the Knapp and Hartung adjustment is used for the omnibus Test of 
+Moderators; this adjustment provides a more conservative test of whether included moderators are related to 
+the overall effect size estimate.
+
+### First, we investigate our moderator "comparator_f"
+
+```{r check moderator}
+
+## evaluate how many studies exist at each level of the moderator
+anxiety_symptoms %>%
+  group_by(comparator_f) %>%
+  count()
+
+```
+
+There are only two studies with an active comparison group, and all other groups
+are relatively small, so we would want to interpret any results from analyses containing
+this moderator with caution. 
+
+
+### Conduct a meta-regression with a three-factor moderator "comparator_f"
+
+```{r meta-regression}
+anxiety_comparator <- rma(yi=yi, vi=vi, mods =~ factor(comparator_f),
+                          method = "REML", knha = TRUE, data = anxiety_symptoms)
+anxiety_comparator
+
+```
+
+
+
+### Alternatively, estimate a no intercept model for predicted effects by group
+
+The above mixed-effects model specification provides the effect size estimate and 
+corresponding confidence interval for the intercept, which represents the reference 
+level of the moderator variable (treatment as usual comparator in this example). 
+The additional estimates in the output are interpreted as the difference in effect between 
+other comparator types and the reference level (i.e., the values of the coefficients are 
+added to or subtracted from the intercept value). In order to examine and report the effect 
+estimate and corresponding confidence interval for the other levels of the moderator variable, 
+the below model specification should be used. 
+
+```{r meta-regression no intercept}
+anxiety_comparator <- rma(yi=yi, vi=vi, mods =~ factor(comparator_f)-1,
+                          method = "REML", knha = TRUE, data = anxiety_symptoms)
+anxiety_comparator
+
+```
+
+
+Credit: This tutorial builds from [Parr, Schweer-Collins et al., 2019](https://onlinelibrary.wiley.com/doi/10.1016/j.adolescence.2019.10.009)
+
+
+      
