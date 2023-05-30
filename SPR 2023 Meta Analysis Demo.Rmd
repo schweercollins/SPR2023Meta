@@ -1,0 +1,236 @@
+---
+title: "SPR 2023: Meta-Analysis Hands-on Demo in R"
+author: "Maria Schweer-Collins"
+date: "2023-05-30"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# You can use this code to install packages required to follow along
+# install.packages(c("robutmeta", "tidyverse", "metafor", "meta", "rio", "here", "readxl"))
+library(robumeta)
+library(tidyverse)
+library(metafor)
+library(meta)
+library(rio)
+library(here)
+library(readxl)
+```
+
+
+## Hands on Demo
+
+
+### Import depression outcomes data
+```{r import, echo = TRUE, eval = TRUE}
+
+depression_symptoms <- import(here("data", "depression_symptoms.csv"))
+
+     
+### You should have 40 observations/studies
+```
+
+### Run random-effects meta-analysis 
+
+```{r random-effects}
+depression_re <- rma(yi, vi, data = depression_symptoms, method="REML", knha=TRUE)
+depression_re
+
+# obtain prediction intervals using predict function
+
+predict(depression_re)
+
+```
+
+
+### Visualize the results with a forest plot 
+
+Forest plots show the study-level and overall effect estimates and the precision with which 
+those effects were estimated, but do not typically indicate the range of true effects 
+(the prediction interval for the overall effect size estimate). When the prediction interval is 
+incorporated, the forest plot presents both sources of variation in the overall effect size 
+estimate – within-study error (the confidence interval for each study’s estimated effect) and 
+true between-study heterogeneity – and therefore displays a more comprehensive summary of the 
+important characteristics of a meta-analysis. A 95% prediction interval is included in a forest 
+plot by using the addcred = TRUE argument, and is denoted by the gray bounding lines around the 
+overall effect size estimate (the diamond-shaped indicator). The width of the indicator itself 
+corresponds to the 95% confidence interval of the overall effect size estimate.
+
+```{r forest, out.width= "125%", out.height="165%"}
+forest(depression_re, 
+          header=c("Author and Year", "SMD [95% CI]"), 
+          mlab="Random-Effects",
+          addcred = TRUE,
+          order = yi,
+          cex = .5,
+          xlab = "Standardized Mean Difference",
+          slab = depression_symptoms$study)
+
+```
+
+
+
+ 
+
+### First, we investigate our moderator "measure_f"
+
+measure_f is a four level factor that distinguishes the depression outcome measure, specifically the Beck
+Depression Inventory (BDI), the Children's Depression Inventory (CDI), and the Center for Epidemiological StudiesDepression Scale (CES-D), and all other measures (other), inclduing the PHQ-9, RADS, and SMFQ. Some prior research suggests that both the BDI and CES-D are overly sensitive measures of depression, with the
+CES-D being more so. The other types of depression measures serve as the reference level
+for this variable. knha = TRUE indicates that the Knapp and Hartung adjustment is used for the omnibus Test of 
+Moderators; this adjustment provides a more conservative test of whether included moderators are related to 
+the overall effect size estimate. In this moderation analysis, we will ask: 
+
+Does the effect of depression prevention programs on depression symptoms vary 
+depending on how depression symptoms were measured?
+
+```{r check moderator}
+
+## evaluate how many studies exist at each level of the moderator
+depression_symptoms %>%
+  group_by(measure_f) %>%
+  count()
+
+## graphically we can examine the distribution of the moderator
+
+boxplot(yi ~ measure_f, data = depression_symptoms, xlab = "Depression Measure", 
+        ylab = "SMD Effect Size", col=c("pink", "orange", "blue"))
+
+```
+ 
+
+
+### Conduct a meta-regression with a three-factor moderator "comparator_f"
+
+```{r meta-regression}
+depression_measure <- rma(yi=yi, vi=vi, mods =~ factor(measure_f),
+                          method = "REML", knha = TRUE, data = depression_symptoms)
+depression_measure
+
+```
+
+
+
+### Alternatively, estimate a no intercept model for predicted effects by group
+
+The above mixed-effects model specification provides the effect size estimate and 
+corresponding confidence interval for the intercept, which represents the reference 
+level of the moderator variable (treatment as usual comparator in this example). 
+The additional estimates in the output are interpreted as the difference in effect between 
+other comparator types and the reference level (i.e., the values of the coefficients are 
+added to or subtracted from the intercept value). In order to examine and report the effect 
+estimate and corresponding confidence interval for the other levels of the moderator variable, 
+the below model specification should be used. Note the difference between the two specifications 
+is the inclusion of - 1 following the moderator variable. 
+
+```{r meta-regression no intercept}
+depression_measure <- rma(yi=yi, vi=vi, mods =~ factor(measure_f)-1,
+                          method = "REML", knha = TRUE, data = depression_symptoms)
+depression_measure
+
+```
+
+
+### Conduct a meta-regression with primary_prevention
+
+Primary prevention is a two level factor variable that indicates whether
+a depression prevention program was delivered as a primary prevention, indicated
+through "yes"  (i.e.,before the onset of depression), or secondary 
+prevention, indicated by "no" (i.e., prevention delivered to youth with some 
+elevations in depression symptoms).
+
+
+### Are depression prevention programs delivered in schools more effective when they are delivered as primary prevention?
+
+
+```{r meta-regression prevent}
+# specify a no-intercept meta-regression model
+depression_prevent <- rma(yi=yi, vi=vi, mods =~ factor(primary_prevention)-1,
+                          method = "REML", knha = TRUE, data = depression_symptoms)
+depression_prevent
+
+```
+
+
+### Conduct a meta-regression with a continuous moderator (baseline depression symptoms)
+
+### Research Question: Are the effects of depression prevention programs larger in
+samples with higher average baseline depression symptoms?
+
+### Remember this is an aggregate variable
+
+```{r baseline }
+depression_baseline <-rma(yi=yi, vi=vi, mods =~ baseline_depression,
+                          method = "REML", knha = TRUE, data = depression_symptoms)
+depression_baseline
+```
+
+
+
+
+### Conduct multivariable meta-regression with categorical and continuous predictor
+
+### Does the effect of depression prevention programs on depression symptoms vary depending on how depression symptoms were measured, when controlling for baseline depression?
+```{r multi meta-reg}
+
+depression_multi <- rma(yi=yi, vi=vi, mods =~ baseline_depression + measure_f,
+                          method = "REML", knha = TRUE, data = depression_symptoms) 
+depression_multi
+
+```
+
+### if time permits, get into groups of two and work together to run one last moderation analysis using meta-regression. Your group can choose to use one of the following: 
+
+
+
+### Example 1 - moderator is united_states where "yes" means the study was conducted in the U.S. and a "no means it was conducted outside the U.S.
+
+- Develop a research question
+- Assess the overall ombnibus test
+- interpret the model
+
+
+```{r EX1}
+mex1 <- rma(yi=yi, vi=vi, mods =~ factor(united_states)-1,
+                          method = "REML", knha = TRUE, data = depression_symptoms)
+mex1
+```
+
+### Example 2 - moderator is secondary_school where "yes" means the study was conducted in secondary schools and "no" means it was conducted in primary schools
+
+```{r EX2}
+mex2 <- rma(yi=yi, vi=vi, mods =~ factor(united_states)-1,
+                          method = "REML", knha = TRUE, data = depression_symptoms)
+mex2
+```
+
+### Example 3 - moderator is high_rob risk of bias, where "yes" indicates a study with high risk of bias and "no" means low or unclear risk of bias
+
+```{r EX3}
+mex3 <- rma(yi=yi, vi=vi, mods =~ factor(high_rob)-1,
+                           method = "REML", knha = TRUE, data = depression_symptoms)
+mex3
+
+```
+
+
+
+
+### A bubble plot
+```{r bubble plot}
+# running a meta-regression with publication year as a continuous moderator 
+depression_publication <-rma(yi=yi, vi=vi, mods =~ publication_year,
+                          method = "REML", knha = TRUE, data = depression_symptoms)
+depression_publication
+# Create bubble plot to visualize relationship between predictor and effect size
+
+regplot(depression_publication)
+
+```
+
+Credit: This tutorial builds from [Parr, Schweer-Collins et al., 2019](https://onlinelibrary.wiley.com/doi/10.1016/j.adolescence.2019.10.009)
+
+
+      
